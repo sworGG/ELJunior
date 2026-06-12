@@ -60,6 +60,7 @@ import ru.ugrasu.eljunior.ui.theme.TextSecondary
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CoursesScreen(
+    onOpenCourse: (courseId: Int) -> Unit,
     viewModel: CoursesViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -92,7 +93,16 @@ fun CoursesScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            if (uiState.courses.isEmpty() && !uiState.isLoading) {
+            if (uiState.error != null && !uiState.isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(text = uiState.error ?: "Ошибка загрузки курсов")
+                        androidx.compose.material3.TextButton(onClick = { viewModel.loadCourses() }) {
+                            Text("Повторить")
+                        }
+                    }
+                }
+            } else if (uiState.courses.isEmpty() && !uiState.isLoading) {
                 EmptyCoursesView()
             } else {
                 LazyColumn(
@@ -103,7 +113,7 @@ fun CoursesScreen(
                     items(uiState.courses) { course ->
                         CourseCard(
                             course = course,
-                            onClick = { /* TODO: Navigate to course details */ }
+                            onClick = { onOpenCourse(course.id) }
                         )
                     }
                 }

@@ -53,6 +53,30 @@ class CourseRepository @Inject constructor(
         }
     }
 
+    suspend fun getDeadlines(
+        timeFrom: Long,
+        timeTo: Long?,
+        limit: Int
+    ): List<Deadline> {
+        val token = authRepository.getToken()
+            ?: throw Exception("Не авторизован")
+
+        val response = moodleApi.getCalendarEvents(
+            token = token,
+            timeFrom = timeFrom,
+            timeTo = timeTo,
+            limit = limit
+        )
+
+        if (response.isSuccessful && response.body() != null) {
+            return response.body()!!.events
+                .map { Deadline.fromMoodleEvent(it) }
+                .sortedBy { it.dueDateTime }
+        } else {
+            throw Exception("Не удалось загрузить дедлайны")
+        }
+    }
+
     suspend fun getUrgentAlerts(): List<UrgentAlert> {
         val deadlines = getUpcomingDeadlines(20)
         return deadlines
@@ -65,5 +89,18 @@ class CourseRepository @Inject constructor(
         val courses = getUserCourses()
         return courses.find { it.id == courseId }
             ?: throw Exception("Курс не найден")
+    }
+
+    suspend fun getCourseContents(courseId: Int): List<ru.ugrasu.eljunior.data.api.CourseSection> {
+        val token = authRepository.getToken()
+            ?: throw Exception("Не авторизован")
+
+        val response = moodleApi.getCourseContents(token = token, courseId = courseId)
+
+        if (response.isSuccessful && response.body() != null) {
+            return response.body()!!
+        } else {
+            throw Exception("Не удалось загрузить содержимое курса")
+        }
     }
 }

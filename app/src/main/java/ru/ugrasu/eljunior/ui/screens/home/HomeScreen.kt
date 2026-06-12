@@ -69,6 +69,7 @@ import ru.ugrasu.eljunior.ui.theme.TextSecondary
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
+    onShowAllDeadlines: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -85,6 +86,28 @@ fun HomeScreen(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 16.dp)
         ) {
+            uiState.error?.let { error ->
+                item {
+                    Card(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                            .fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color.White)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = error,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextPrimary
+                            )
+                            TextButton(onClick = { viewModel.refresh() }) {
+                                Text(text = "Повторить", color = PrimaryRed)
+                            }
+                        }
+                    }
+                }
+            }
+
             // Header with user info
             item {
                 HomeHeader(
@@ -107,7 +130,7 @@ fun HomeScreen(
             item {
                 DeadlinesSection(
                     deadlines = uiState.deadlines,
-                    onShowAllClick = { /* TODO */ }
+                    onShowAllClick = onShowAllDeadlines
                 )
             }
 

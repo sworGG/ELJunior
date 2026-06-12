@@ -26,13 +26,17 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import ru.ugrasu.eljunior.ui.screens.auth.AuthScreen
 import ru.ugrasu.eljunior.ui.screens.auth.AuthViewModel
+import ru.ugrasu.eljunior.ui.screens.course_details.CourseDetailsScreen
 import ru.ugrasu.eljunior.ui.screens.courses.CoursesScreen
+import ru.ugrasu.eljunior.ui.screens.deadlines.DeadlinesScreen
 import ru.ugrasu.eljunior.ui.screens.home.HomeScreen
 import ru.ugrasu.eljunior.ui.screens.profile.ProfileScreen
 import ru.ugrasu.eljunior.ui.screens.schedule.ScheduleScreen
@@ -49,6 +53,8 @@ sealed class Screen(
     object Schedule : Screen("schedule", "Расписание", Icons.Filled.CalendarToday, Icons.Outlined.CalendarToday)
     object Courses : Screen("courses", "Курсы", Icons.Filled.MenuBook, Icons.Outlined.MenuBook)
     object Profile : Screen("profile", "Профиль", Icons.Filled.Person, Icons.Outlined.Person)
+    object CourseDetails : Screen("course/{courseId}", "Курс", Icons.Filled.MenuBook, Icons.Outlined.MenuBook)
+    object Deadlines : Screen("deadlines", "Дедлайны", Icons.Filled.CalendarToday, Icons.Outlined.CalendarToday)
 }
 
 // Удален конфликтующий класс AuthScreen, так как он затеняет импорт Composable AuthScreen
@@ -131,18 +137,42 @@ fun MainNavigation(
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(Screen.Home.route) {
-                HomeScreen()
+                HomeScreen(
+                    onShowAllDeadlines = { navController.navigate(Screen.Deadlines.route) }
+                )
             }
             composable(Screen.Schedule.route) {
                 ScheduleScreen()
             }
             composable(Screen.Courses.route) {
-                CoursesScreen()
+                CoursesScreen(
+                    onOpenCourse = { courseId ->
+                        navController.navigate("course/$courseId")
+                    }
+                )
             }
             composable(Screen.Profile.route) {
                 // Здесь мы передаем колбэк onLogout в экран профиля.
                 // В ProfileScreen при нажатии кнопки "Выход" нужно вызвать этот лямбда-метод.
                 ProfileScreen(onLogout = onLogout)
+            }
+
+            composable(
+                "course/{courseId}",
+                arguments = listOf(
+                    navArgument("courseId") { type = NavType.IntType }
+                )
+            ) {
+                CourseDetailsScreen(
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(Screen.Deadlines.route) {
+                DeadlinesScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenCourse = { courseId -> navController.navigate("course/$courseId") }
+                )
             }
         }
     }
