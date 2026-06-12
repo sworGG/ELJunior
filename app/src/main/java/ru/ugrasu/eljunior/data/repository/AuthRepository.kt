@@ -9,16 +9,24 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.FormBody
+import com.google.gson.Gson
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import ru.ugrasu.eljunior.data.api.MoodleApi
+import ru.ugrasu.eljunior.data.model.ItportLoginRequest
+import ru.ugrasu.eljunior.data.model.ItportLoginResponse
 import ru.ugrasu.eljunior.data.model.UserProfile
+import ru.ugrasu.eljunior.di.InMemoryCookieJar
 import ru.ugrasu.eljunior.util.toUserMessage
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,8 +37,12 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 class AuthRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val moodleApi: MoodleApi,
-    private val httpClient: OkHttpClient
+    private val httpClient: OkHttpClient,
+    private val cookieJar: InMemoryCookieJar
 ) {
+    private val gson = Gson()
+    private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     companion object {
         private val TOKEN_KEY = stringPreferencesKey("moodle_token")
         private val USER_ID_KEY = intPreferencesKey("user_id")
@@ -40,6 +52,21 @@ class AuthRepository @Inject constructor(
         private val LAST_NAME_KEY = stringPreferencesKey("last_name")
         private val FULL_NAME_KEY = stringPreferencesKey("full_name")
         private val AVATAR_URL_KEY = stringPreferencesKey("avatar_url")
+        private val GROUP_ID_KEY = intPreferencesKey("itport_group_id")
+        private val GROUP_NAME_KEY = stringPreferencesKey("itport_group_name")
+
+        private const val ITPORT_HOST = "itport.ugrasu.ru"
+        private const val ITPORT_BASE_URL = "https://itport.ugrasu.ru"
+        private const val ITPORT_LOGIN_URL = "$ITPORT_BASE_URL/login"
+        private const val ITPORT_STUDENT_TIMETABLE_URL = "$ITPORT_BASE_URL/timetable/student"
+        private val CSRF_PATTERN = Regex("""<meta name="csrf-token" content="([^"]+)"""")
+
+        private val GROUP_PROBE_URLS = listOf(
+            ITPORT_STUDENT_TIMETABLE_URL,
+            "$ITPORT_BASE_URL/timetable",
+            "$ITPORT_BASE_URL/dashboard",
+            "$ITPORT_BASE_URL/timetable/search"
+        )
     }
 
     val isLoggedIn: Flow<Boolean> = context.dataStore.data.map { preferences ->
@@ -104,9 +131,11 @@ class AuthRepository @Inject constructor(
             // Step 3: Save to DataStore (включая пароль)
             val userProfile = UserProfile.fromSiteInfo(siteInfo)
             saveUserData(token, userProfile, password)
-            
-            // Step 4: Авторизуемся на itport с теми же учётными данными
-            loginToItport(username, password)
+
+            // itport — в фоне, чтобы расписание открывалось без повторного входа
+            backgroundScope.launch {
+                ensureItportSession(force = true)
+            }
 
             Result.success(userProfile)
         } catch (e: Exception) {
@@ -129,41 +158,215 @@ class AuthRepository @Inject constructor(
         }
     }
 
+    suspend fun getGroupId(): Int? {
+        return context.dataStore.data.first()[GROUP_ID_KEY]
+    }
+
+    suspend fun getGroupName(): String? {
+        return context.dataStore.data.first()[GROUP_NAME_KEY]
+    }
+
     /**
-     * Автоматическая авторизация на itport.ugrasu.ru
-     * Использует те же учётные данные (username/password)
+     * Гарантирует активную сессию itport (без определения группы).
      */
-    private suspend fun loginToItport(username: String, password: String) {
-        withContext(Dispatchers.IO) {
+    suspend fun ensureItportLogin(force: Boolean = false): Result<Unit> {
+        return withContext(Dispatchers.IO) {
             try {
-                val formBody = FormBody.Builder()
-                    .add("login", username)
-                    .add("password", password)
-                    .add("submit", "Вход")
-                    .build()
-
-                val request = Request.Builder()
-                    .url("https://itport.ugrasu.ru/login")
-                    .post(formBody)
-                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36")
-                    .build()
-
-                val response = httpClient.newCall(request).execute()
-                
-                if (response.isSuccessful) {
-                    Log.d("AuthRepository", "Успешная авторизация на itport.ugrasu.ru")
-                } else {
-                    Log.w("AuthRepository", "Ошибка авторизации на itport: ${response.code}")
+                if (!force && cookieJar.hasSessionCookie(ITPORT_HOST)) {
+                    return@withContext Result.success(Unit)
                 }
-                response.close()
+
+                performItportLogin(
+                    username = getUsername()
+                        ?: return@withContext Result.failure(Exception("Не авторизован")),
+                    password = getPassword()
+                        ?: return@withContext Result.failure(Exception("Войдите заново, чтобы открыть расписание"))
+                )
+                Result.success(Unit)
             } catch (e: Exception) {
-                Log.e("AuthRepository", "Ошибка при попытке авторизации на itport", e)
-                // Не выбрасываем ошибку - главная авторизация уже прошла
+                Log.e("AuthRepository", "Ошибка входа itport", e)
+                Result.failure(Exception("Не удалось войти в itport: ${e.toUserMessage()}"))
             }
         }
     }
 
+    /**
+     * Гарантирует активную сессию itport и возвращает ID учебной группы.
+     */
+    suspend fun ensureItportSession(force: Boolean = false): Result<Int> {
+        return withContext(Dispatchers.IO) {
+            try {
+                if (!force) {
+                    getGroupId()?.let { return@withContext Result.success(it) }
+                }
+
+                val username = getUsername()
+                    ?: return@withContext Result.failure(Exception("Не авторизован"))
+                val password = getPassword()
+                    ?: return@withContext Result.failure(Exception("Войдите заново, чтобы открыть расписание"))
+
+                val loginResponse = performItportLogin(username, password)
+                val resolvedGroup = resolveGroupIdAfterLogin(loginResponse.redirect)
+                    ?: return@withContext Result.failure(Exception("Не удалось определить учебную группу"))
+
+                saveGroupInfo(resolvedGroup.id, resolvedGroup.name)
+                Result.success(resolvedGroup.id)
+            } catch (e: Exception) {
+                Log.e("AuthRepository", "Ошибка сессии itport", e)
+                Result.failure(Exception("Не удалось войти в itport: ${e.toUserMessage()}"))
+            }
+        }
+    }
+
+    private fun performItportLogin(username: String, password: String): ItportLoginResponse {
+        val loginPage = fetchItportPage(ITPORT_LOGIN_URL)
+        val csrfToken = extractCsrfToken(loginPage.html)
+            ?: throw Exception("Не удалось получить CSRF-токен")
+
+        val loginResponse = postItportLogin(username, password, csrfToken)
+        if (loginResponse.redirect.isNullOrBlank()) {
+            val message = loginResponse.message ?: "Ошибка авторизации на itport"
+            throw Exception(message)
+        }
+
+        Log.d("AuthRepository", "itport redirect: ${loginResponse.redirect}")
+        return loginResponse
+    }
+
+    private data class ResolvedGroup(val id: Int, val name: String?)
+
+    private suspend fun resolveGroupIdAfterLogin(redirect: String?): ResolvedGroup? {
+        val candidates = buildList {
+            redirect?.let { add(resolveItportUrl(it)) }
+            addAll(GROUP_PROBE_URLS)
+        }.distinct()
+
+        candidates.forEach { url ->
+            val page = fetchItportPage(url)
+            ItportGroupResolver.fromUrl(page.finalUrl)?.let { groupId ->
+                return ResolvedGroup(groupId, ItportGroupResolver.extractGroupName(page.html))
+            }
+            ItportGroupResolver.fromHtml(page.html)?.let { groupId ->
+                return ResolvedGroup(groupId, ItportGroupResolver.extractGroupName(page.html))
+            }
+        }
+
+        val moodleGroupName = findGroupNameFromMoodle()
+        if (!moodleGroupName.isNullOrBlank()) {
+            candidates.forEach { url ->
+                val page = fetchItportPage(url)
+                ItportGroupResolver.fromHtmlByGroupName(page.html, moodleGroupName)?.let { groupId ->
+                    return ResolvedGroup(groupId, moodleGroupName)
+                }
+            }
+        }
+
+        return null
+    }
+
+    private suspend fun findGroupNameFromMoodle(): String? {
+        return try {
+            val token = getToken() ?: return null
+            val userId = getUserId() ?: return null
+            val response = moodleApi.getUserProfile(token, userId = userId)
+            if (!response.isSuccessful) return null
+
+            response.body()?.firstOrNull()?.customfields.orEmpty()
+                .firstNotNullOfOrNull { field ->
+                    val shortName = field.shortname?.lowercase().orEmpty()
+                    val name = field.name?.lowercase().orEmpty()
+                    val isGroupField = shortName.contains("group") ||
+                        shortName.contains("gruppa") ||
+                        name.contains("групп")
+                    if (isGroupField) {
+                        field.displayvalue?.takeIf { it.isNotBlank() }
+                            ?: field.value?.takeIf { it.isNotBlank() }
+                    } else {
+                        null
+                    }
+                }
+        } catch (e: Exception) {
+            Log.w("AuthRepository", "Не удалось получить группу из Moodle", e)
+            null
+        }
+    }
+
+    private fun postItportLogin(
+        username: String,
+        password: String,
+        csrfToken: String
+    ): ItportLoginResponse {
+        val body = gson.toJson(
+            ItportLoginRequest(email = username, password = password)
+        ).toRequestBody("application/json".toMediaType())
+
+        val request = Request.Builder()
+            .url(ITPORT_LOGIN_URL)
+            .post(body)
+            .header("User-Agent", defaultUserAgent())
+            .header("Accept", "application/json")
+            .header("X-Requested-With", "XMLHttpRequest")
+            .header("X-CSRF-TOKEN", csrfToken)
+            .header("Referer", ITPORT_LOGIN_URL)
+            .build()
+
+        httpClient.newCall(request).execute().use { response ->
+            val responseBody = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                throw Exception("itport вернул код ${response.code}")
+            }
+            return gson.fromJson(responseBody, ItportLoginResponse::class.java)
+                ?: throw Exception("Пустой ответ itport")
+        }
+    }
+
+    private data class ItportPage(val html: String, val finalUrl: String)
+
+    private fun fetchItportPage(url: String): ItportPage {
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", defaultUserAgent())
+            .build()
+
+        httpClient.newCall(request).execute().use { response ->
+            return ItportPage(
+                html = response.body?.string().orEmpty(),
+                finalUrl = response.request.url.toString()
+            )
+        }
+    }
+
+    private suspend fun saveGroupInfo(groupId: Int, groupName: String?) {
+        context.dataStore.edit { preferences ->
+            preferences[GROUP_ID_KEY] = groupId
+            groupName?.let { preferences[GROUP_NAME_KEY] = it }
+        }
+    }
+
+    private fun extractCsrfToken(html: String): String? {
+        return CSRF_PATTERN.find(html)?.groupValues?.get(1)
+    }
+
+    fun getItportScheduleUrl(): String = ITPORT_STUDENT_TIMETABLE_URL
+
+    private fun resolveItportUrl(pathOrUrl: String): String {
+        return if (pathOrUrl.startsWith("http")) {
+            pathOrUrl
+        } else {
+            "https://itport.ugrasu.ru${if (pathOrUrl.startsWith("/")) pathOrUrl else "/$pathOrUrl"}"
+        }
+    }
+
+    private fun defaultUserAgent(): String {
+        return "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+    }
+
+    fun getItportCookies(): List<okhttp3.Cookie> {
+        return cookieJar.getCookiesForHost(ITPORT_HOST)
+    }
+
     suspend fun logout() {
+        cookieJar.clear()
         context.dataStore.edit { preferences ->
             preferences.clear()
         }

@@ -3,11 +3,13 @@ package ru.ugrasu.eljunior.ui.screens.courses
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import ru.ugrasu.eljunior.data.model.Course
 import ru.ugrasu.eljunior.data.repository.CourseRepository
 import javax.inject.Inject
@@ -31,7 +33,9 @@ class CoursesViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true, error = null) }
 
             try {
-                val courses = courseRepository.getUserCourses()
+                val courses = withContext(Dispatchers.IO) {
+                    courseRepository.getUserCourses()
+                }
                 _uiState.update {
                     it.copy(
                         isLoading = false,

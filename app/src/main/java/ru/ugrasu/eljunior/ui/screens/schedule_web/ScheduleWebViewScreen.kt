@@ -5,7 +5,6 @@ import android.webkit.CookieManager
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.webkit.WebChromeClient
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -14,18 +13,23 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import ru.ugrasu.eljunior.data.repository.AuthRepository
 import ru.ugrasu.eljunior.ui.theme.TextPrimary
 
-private const val IT_PORT_LOGIN_URL = "https://itport.ugrasu.ru/login"
-private const val IT_PORT_SCHEDULE_URL = "https://itport.ugrasu.ru/timetable/group/8913/"
+private const val ITPORT_STUDENT_TIMETABLE_URL = "https://itport.ugrasu.ru/timetable/student"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ScheduleWebViewScreen() {
+fun ScheduleWebViewScreen(
+    url: String = ITPORT_STUDENT_TIMETABLE_URL,
+    authRepository: AuthRepository? = null
+) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -41,7 +45,8 @@ fun ScheduleWebViewScreen() {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            url = IT_PORT_LOGIN_URL
+            url = url,
+            authRepository = authRepository
         )
     }
 }
@@ -50,41 +55,52 @@ fun ScheduleWebViewScreen() {
 @Composable
 private fun ItportWebView(
     modifier: Modifier,
-    url: String
+    url: String,
+    authRepository: AuthRepository?
 ) {
+    val context = LocalContext.current
+    val webView = remember(url) {
+        CookieManager.getInstance().setAcceptCookie(true)
+        authRepository?.getItportCookies()?.forEach { cookie ->
+            CookieManager.getInstance().setCookie("https://itport.ugrasu.ru", cookie.toString())
+        }
+        CookieManager.getInstance().flush()
+
+        WebView(context).apply {
+            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.cacheMode = WebSettings.LOAD_DEFAULT
+            settings.useWideViewPort = true
+            settings.loadWithOverviewMode = true
+            settings.builtInZoomControls = false
+            settings.displayZoomControls = false
+            settings.mediaPlaybackRequiresUserGesture = true
+
+            webViewClient = object : WebViewClient() {
+                @Deprecated("Deprecated in Java")
+                override fun shouldOverrideUrlLoading(view: WebView?, requestUrl: String?): Boolean {
+                    if (requestUrl != null && requestUrl.contains("itport.ugrasu.ru")) {
+                        view?.loadUrl(requestUrl)
+                        return true
+                    }
+                    return false
+                }
+            }
+
+            loadUrl(url)
+        }
+    }
+
+    DisposableEffect(webView) {
+        onDispose {
+            webView.stopLoading()
+            webView.destroy()
+        }
+    }
+
     AndroidView(
         modifier = modifier,
-        factory = { ctx ->
-            CookieManager.getInstance().setAcceptCookie(true)
-            WebView(ctx).apply {
-                CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.databaseEnabled = true
-                settings.cacheMode = WebSettings.LOAD_DEFAULT
-                settings.useWideViewPort = true
-                settings.loadWithOverviewMode = true
-                settings.builtInZoomControls = false
-                settings.displayZoomControls = false
-                
-                // Обработчик для навигации внутри WebView
-                webViewClient = object : WebViewClient() {
-                    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                        // Разрешаем навигацию по всему itport.ugrasu.ru
-                        if (url != null && url.contains("itport.ugrasu.ru")) {
-                            view?.loadUrl(url)
-                            return true
-                        }
-                        return false
-                    }
-                }
-                
-                // Обработчик для JavaScript
-                webChromeClient = WebChromeClient()
-                
-                loadUrl(url)
-            }
-        }
+        factory = { webView }
     )
 }
-

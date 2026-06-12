@@ -43,11 +43,16 @@ data class Course(
 ) {
     companion object {
         fun fromMoodleCourse(course: MoodleCourse): Course {
+            val plainSummary = course.summary
+                ?.replace(Regex("<[^>]*>"), "")
+                ?.take(200)
+                ?: ""
+
             return Course(
                 id = course.id,
                 name = course.displayName ?: course.fullName,
                 shortName = course.shortName,
-                description = course.summary?.replace(Regex("<[^>]*>"), "") ?: "",
+                description = plainSummary,
                 imageUrl = course.overviewFiles?.firstOrNull()?.fileUrl,
                 progress = course.progress ?: 0f,
                 isFavourite = course.isFavourite ?: false

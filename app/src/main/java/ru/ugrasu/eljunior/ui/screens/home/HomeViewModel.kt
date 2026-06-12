@@ -6,9 +6,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import ru.ugrasu.eljunior.data.model.Deadline
 import ru.ugrasu.eljunior.data.model.DaySchedule
 import ru.ugrasu.eljunior.data.model.LessonType
@@ -17,7 +19,6 @@ import ru.ugrasu.eljunior.data.model.UrgentAlert
 import ru.ugrasu.eljunior.data.model.UserProfile
 import ru.ugrasu.eljunior.data.repository.AuthRepository
 import ru.ugrasu.eljunior.data.repository.CourseRepository
-import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.temporal.WeekFields
@@ -25,7 +26,7 @@ import java.util.Locale
 import javax.inject.Inject
 
 data class HomeUiState(
-    val isLoading: Boolean = true,
+    val isLoadingDeadlines: Boolean = false,
     val user: UserProfile? = null,
     val urgentAlert: UrgentAlert? = null,
     val deadlines: List<Deadline> = emptyList(),
@@ -49,38 +50,36 @@ class HomeViewModel @Inject constructor(
     )
 
     init {
-        loadHomeData()
+        _uiState.value = HomeUiState(todaySchedule = getMockTodaySchedule())
+        loadDeadlines()
     }
 
     fun loadHomeData() {
+        loadDeadlines()
+    }
+
+    private fun loadDeadlines() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            _uiState.value = _uiState.value.copy(isLoadingDeadlines = true, error = null)
 
             try {
-                // Load user
-                val user = authRepository.currentUser.stateIn(viewModelScope).value
+                val deadlines = withContext(Dispatchers.IO) {
+                    courseRepository.getUpcomingDeadlines(limit = 5)
+                }
 
-                // Load deadlines
-                val deadlines = courseRepository.getUpcomingDeadlines(10)
-
-                // Get urgent alert (first urgent deadline)
                 val urgentAlert = deadlines.firstOrNull { it.isUrgent }?.let {
                     UrgentAlert.fromDeadline(it)
                 }
 
-                // Load today's schedule (mock data for now - would be from university API)
-                val todaySchedule = getMockTodaySchedule()
-
-                _uiState.value = HomeUiState(
-                    isLoading = false,
-                    user = user,
+                _uiState.value = _uiState.value.copy(
+                    isLoadingDeadlines = false,
                     urgentAlert = urgentAlert,
-                    deadlines = deadlines.take(5),
-                    todaySchedule = todaySchedule
+                    deadlines = deadlines,
+                    error = null
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
-                    isLoading = false,
+                    isLoadingDeadlines = false,
                     error = e.message ?: "Ошибка загрузки данных"
                 )
             }

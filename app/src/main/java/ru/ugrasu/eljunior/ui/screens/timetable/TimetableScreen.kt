@@ -17,20 +17,26 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import ru.ugrasu.eljunior.data.model.Lesson
+import ru.ugrasu.eljunior.ui.screens.schedule_web.ScheduleWebViewScreen
 import ru.ugrasu.eljunior.data.model.ScheduleDay
 import ru.ugrasu.eljunior.ui.theme.BackgroundGray
 import ru.ugrasu.eljunior.ui.theme.PrimaryRed
@@ -38,40 +44,62 @@ import ru.ugrasu.eljunior.ui.theme.TextPrimary
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimetableScreen(
     viewModel: TimetableViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(BackgroundGray)
-    ) {
-        // Хедер с навигацией по датам
-        TimetableHeader(
-            currentDate = uiState.currentDate,
-            onPreviousWeek = { viewModel.goToPreviousWeek() },
-            onNextWeek = { viewModel.goToNextWeek() },
-            onToday = { viewModel.goToToday() }
+    if (uiState.useWebViewFallback && uiState.webViewUrl != null) {
+        ScheduleWebViewScreen(
+            url = uiState.webViewUrl!!,
+            authRepository = viewModel.authRepository
         )
+        return
+    }
 
-        // Основной контент
-        Box(
+    val title = uiState.groupName?.let { "Расписание · $it" } ?: "Расписание"
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(title) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.White,
+                    titleContentColor = TextPrimary
+                )
+            )
+        }
+    ) { padding ->
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
-            contentAlignment = Alignment.Center
+                .padding(padding)
+                .background(BackgroundGray)
         ) {
-            when {
-                uiState.isLoading -> CircularProgressIndicator()
-                uiState.error != null -> ErrorState(
-                    message = uiState.error!!,
-                    onRetry = { viewModel.loadSchedule() }
-                )
-                uiState.schedule.isEmpty() -> EmptyState()
-                else -> ScheduleList(schedule = uiState.schedule)
+            TimetableHeader(
+                currentDate = uiState.currentDate,
+                onPreviousWeek = { viewModel.goToPreviousWeek() },
+                onNextWeek = { viewModel.goToNextWeek() },
+                onToday = { viewModel.goToToday() }
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                when {
+                    uiState.isLoading -> CircularProgressIndicator()
+                    uiState.error != null -> ErrorState(
+                        message = uiState.error!!,
+                        onRetry = { viewModel.loadSchedule() }
+                    )
+                    uiState.schedule.isEmpty() -> EmptyState()
+                    else -> ScheduleList(schedule = uiState.schedule)
+                }
             }
         }
     }

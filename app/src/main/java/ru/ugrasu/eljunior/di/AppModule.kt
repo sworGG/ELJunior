@@ -4,9 +4,6 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import okhttp3.Cookie
-import okhttp3.CookieJar
-import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -21,40 +18,25 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object AppModule {
 
-    /**
-     * CookieJar для сохранения cookies между запросами
-     * Нужно для авторизации на itport.ugrasu.ru
-     */
     @Provides
     @Singleton
-    fun provideCookieJar(): CookieJar {
-        return object : CookieJar {
-            private val cookieStore = mutableMapOf<String, List<Cookie>>()
-
-            override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-                cookieStore[url.host] = cookies
-            }
-
-            override fun loadForRequest(url: HttpUrl): List<Cookie> {
-                return cookieStore[url.host] ?: emptyList()
-            }
-        }
-    }
-
-    @Provides
-    @Singleton
-    fun provideOkHttpClient(cookieJar: CookieJar): OkHttpClient {
-        val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
-        }
-
-        return OkHttpClient.Builder()
-            .addInterceptor(loggingInterceptor)
+    fun provideOkHttpClient(cookieJar: InMemoryCookieJar): OkHttpClient {
+        val builder = OkHttpClient.Builder()
             .cookieJar(cookieJar)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
-            .build()
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
+            .writeTimeout(20, TimeUnit.SECONDS)
+
+        if (BuildConfig.DEBUG) {
+            builder.addInterceptor(
+                HttpLoggingInterceptor().apply {
+                    // BODY логирует мегабайты base64 из Moodle и сильно тормозит эмулятор
+                    level = HttpLoggingInterceptor.Level.BASIC
+                }
+            )
+        }
+
+        return builder.build()
     }
 
     @Provides

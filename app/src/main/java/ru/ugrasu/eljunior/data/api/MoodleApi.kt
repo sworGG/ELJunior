@@ -145,6 +145,14 @@ data class CourseModule(
 /**
  * User profile response
  */
+data class UserCustomField(
+    val type: String?,
+    val value: String?,
+    val displayvalue: String?,
+    val name: String?,
+    val shortname: String?
+)
+
 data class UserProfileResponse(
     val id: Int,
     val username: String,
@@ -153,5 +161,6 @@ data class UserProfileResponse(
     val fullname: String,
     val email: String?,
     val profileimageurl: String?,
-    val profileimageurlsmall: String?
+    val profileimageurlsmall: String?,
+    val customfields: List<UserCustomField>?
 )
