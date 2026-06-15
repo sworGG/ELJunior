@@ -51,31 +51,25 @@ class TimetableViewModel @Inject constructor(
                 )
             }
 
-            val sessionResult = authRepository.ensureItportSession()
-            if (sessionResult.isFailure) {
-                val loginResult = authRepository.ensureItportLogin(force = true)
-                if (loginResult.isSuccess) {
+            val loginResult = authRepository.ensureItportLogin()
+            if (loginResult.isFailure) {
+                val retryLogin = authRepository.ensureItportLogin(force = true)
+                if (retryLogin.isFailure) {
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            useWebViewFallback = true,
-                            webViewUrl = authRepository.getItportScheduleUrl(),
-                            error = null
+                            error = retryLogin.exceptionOrNull()?.message ?: "Ошибка авторизации"
                         )
                     }
                     return@launch
                 }
-
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        error = sessionResult.exceptionOrNull()?.message ?: "Ошибка авторизации"
-                    )
-                }
-                return@launch
             }
 
-            val groupId = sessionResult.getOrNull()
+            var groupId = authRepository.ensureItportSession().getOrNull()
+            if (groupId == null) {
+                groupId = authRepository.ensureItportSession(force = true).getOrNull()
+            }
+
             if (groupId == null) {
                 openWebViewFallback()
                 return@launch
@@ -87,11 +81,8 @@ class TimetableViewModel @Inject constructor(
             val schedule = scheduleRepository.getScheduleForDate(groupId, dateStr)
 
             if (schedule.isEmpty()) {
-                val loginResult = authRepository.ensureItportLogin()
-                if (loginResult.isSuccess) {
-                    openWebViewFallback()
-                    return@launch
-                }
+                openWebViewFallback(groupId)
+                return@launch
             }
 
             _uiState.update {
@@ -106,12 +97,18 @@ class TimetableViewModel @Inject constructor(
         }
     }
 
-    private fun openWebViewFallback() {
+    private suspend fun openWebViewFallback(groupId: Int? = null) {
+        val url = authRepository.getItportScheduleUrl(
+            date = _uiState.value.currentDate,
+            groupId = groupId,
+            includeDate = false
+        )
         _uiState.update {
             it.copy(
                 isLoading = false,
                 useWebViewFallback = true,
-                webViewUrl = authRepository.getItportScheduleUrl(),
+                webViewUrl = url,
+                groupId = groupId ?: it.groupId,
                 error = null
             )
         }

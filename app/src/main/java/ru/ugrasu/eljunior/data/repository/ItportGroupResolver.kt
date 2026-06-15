@@ -16,8 +16,17 @@ object ItportGroupResolver {
     }
 
     fun fromHtml(html: String): Int? {
+        return fromPage(html, "")
+    }
+
+    /**
+     * Извлекает ID группы из HTML и финального URL страницы (после редиректов).
+     */
+    fun fromPage(html: String, finalUrl: String): Int? {
         if (html.isBlank() || isLoginPage(html)) return null
 
+        fromUrl(finalUrl)?.let { return it }
+        fromMetaRefresh(html)?.let { return it }
         fromUrl(html)?.let { return it }
 
         GROUP_ID_IN_TEXT.findAll(html)
@@ -25,7 +34,14 @@ object ItportGroupResolver {
             .firstOrNull()
             ?.let { return it }
 
-        return parseFromDocument(Jsoup.parse(html))
+        val doc = Jsoup.parse(html)
+        fromSelectedOption(doc)?.let { return it }
+
+        if (!isMultiGroupSearchPage(finalUrl, html)) {
+            return parseFromDocument(doc)
+        }
+
+        return null
     }
 
     fun fromHtmlByGroupName(html: String, groupName: String): Int? {
@@ -94,6 +110,39 @@ object ItportGroupResolver {
         }
 
         return null
+    }
+
+    private fun fromMetaRefresh(html: String): Int? {
+        val metaRefresh = Regex(
+            """<meta[^>]+http-equiv=["']?refresh["']?[^>]+content=["']?\d+\s*;\s*url=['"]?([^'">\s]+)""",
+            RegexOption.IGNORE_CASE
+        ).find(html)
+        metaRefresh?.groupValues?.getOrNull(1)?.let { redirectUrl ->
+            fromUrl(redirectUrl)?.let { return it }
+        }
+        return null
+    }
+
+    private fun fromSelectedOption(doc: Document): Int? {
+        val selectors = listOf(
+            "select[name*=group] option[selected]",
+            "select[id*=group] option[selected]",
+            "option[selected][value]"
+        )
+        selectors.forEach { selector ->
+            doc.select(selector).forEach { option ->
+                val value = option.attr("value")
+                value.toIntOrNull()?.takeIf { it > 0 }?.let { return it }
+                fromUrl(value)?.let { return it }
+            }
+        }
+        return null
+    }
+
+    private fun isMultiGroupSearchPage(finalUrl: String, html: String): Boolean {
+        return finalUrl.contains("/timetable/search") ||
+            html.contains("/timetable/search") ||
+            Jsoup.parse(html).select("a[href*=/timetable/group/]").size > 3
     }
 
     private fun isLoginPage(html: String): Boolean {

@@ -54,7 +54,10 @@ fun TimetableScreen(
     if (uiState.useWebViewFallback && uiState.webViewUrl != null) {
         ScheduleWebViewScreen(
             url = uiState.webViewUrl!!,
-            authRepository = viewModel.authRepository
+            authRepository = viewModel.authRepository,
+            targetGroupUrl = uiState.webViewUrl?.takeIf {
+                it.contains("/timetable/group/")
+            }
         )
         return
     }
