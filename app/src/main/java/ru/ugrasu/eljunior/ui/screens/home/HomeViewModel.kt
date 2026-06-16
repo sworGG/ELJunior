@@ -2,6 +2,7 @@ package ru.ugrasu.eljunior.ui.screens.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import ru.ugrasu.eljunior.data.repository.ItportDebtsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -19,6 +20,7 @@ import ru.ugrasu.eljunior.data.model.UrgentAlert
 import ru.ugrasu.eljunior.data.model.UserProfile
 import ru.ugrasu.eljunior.data.repository.AuthRepository
 import ru.ugrasu.eljunior.data.repository.CourseRepository
+import kotlinx.coroutines.flow.update
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.temporal.WeekFields
@@ -27,6 +29,8 @@ import javax.inject.Inject
 
 data class HomeUiState(
     val isLoadingDeadlines: Boolean = false,
+    val isLoadingDebts: Boolean = false,
+    val activeDebtsCount: Int = 0,
     val user: UserProfile? = null,
     val urgentAlert: UrgentAlert? = null,
     val deadlines: List<Deadline> = emptyList(),
@@ -37,7 +41,8 @@ data class HomeUiState(
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val courseRepository: CourseRepository
+    private val courseRepository: CourseRepository,
+    private val debtsRepository: ItportDebtsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -52,10 +57,26 @@ class HomeViewModel @Inject constructor(
     init {
         _uiState.value = HomeUiState(todaySchedule = getMockTodaySchedule())
         loadDeadlines()
+        loadDebts()
     }
 
     fun loadHomeData() {
         loadDeadlines()
+        loadDebts()
+    }
+
+    private fun loadDebts() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingDebts = true) }
+            try {
+                val count = withContext(Dispatchers.IO) {
+                    debtsRepository.getActiveDebts().size
+                }
+                _uiState.update { it.copy(isLoadingDebts = false, activeDebtsCount = count) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoadingDebts = false) }
+            }
+        }
     }
 
     private fun loadDeadlines() {

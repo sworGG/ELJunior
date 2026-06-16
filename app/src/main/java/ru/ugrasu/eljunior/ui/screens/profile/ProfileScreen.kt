@@ -30,6 +30,7 @@ import ru.ugrasu.eljunior.ui.theme.PrimaryRed // Используем ваш ц�
 @Composable
 fun ProfileScreen(
     onLogout: () -> Unit,
+    onOpenDebts: () -> Unit,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -130,7 +131,7 @@ fun ProfileScreen(
                     ProfileMenuItem(
                         icon = Icons.Default.School,
                         title = "Успеваемость",
-                        onClick = { /* Навигация на экран успеваемости */ }
+                        onClick = { onOpenDebts() }
                     )
                     ProfileMenuItem(
                         icon = Icons.Default.Notifications,

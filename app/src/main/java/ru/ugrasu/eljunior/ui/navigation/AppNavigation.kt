@@ -37,6 +37,7 @@ import ru.ugrasu.eljunior.ui.screens.auth.AuthViewModel
 import ru.ugrasu.eljunior.ui.screens.course_details.CourseDetailsScreen
 import ru.ugrasu.eljunior.ui.screens.courses.CoursesScreen
 import ru.ugrasu.eljunior.ui.screens.deadlines.DeadlinesScreen
+import ru.ugrasu.eljunior.ui.screens.debts.DebtsScreen
 import ru.ugrasu.eljunior.ui.screens.home.HomeScreen
 import ru.ugrasu.eljunior.ui.screens.profile.ProfileScreen
 import ru.ugrasu.eljunior.ui.screens.schedule.ScheduleScreen
@@ -55,6 +56,7 @@ sealed class Screen(
     object Profile : Screen("profile", "Профиль", Icons.Filled.Person, Icons.Outlined.Person)
     object CourseDetails : Screen("course/{courseId}", "Курс", Icons.Filled.MenuBook, Icons.Outlined.MenuBook)
     object Deadlines : Screen("deadlines", "Дедлайны", Icons.Filled.CalendarToday, Icons.Outlined.CalendarToday)
+    object Debts : Screen("debts", "Задолженности", Icons.Filled.CalendarToday, Icons.Outlined.CalendarToday)
 }
 
 // Удален конфликтующий класс AuthScreen, так как он затеняет импорт Composable AuthScreen
@@ -138,7 +140,8 @@ fun MainNavigation(
         ) {
             composable(Screen.Home.route) {
                 HomeScreen(
-                    onShowAllDeadlines = { navController.navigate(Screen.Deadlines.route) }
+                    onShowAllDeadlines = { navController.navigate(Screen.Deadlines.route) },
+                    onShowDebts = { navController.navigate(Screen.Debts.route) }
                 )
             }
             composable(Screen.Schedule.route) {
@@ -154,7 +157,10 @@ fun MainNavigation(
             composable(Screen.Profile.route) {
                 // Здесь мы передаем колбэк onLogout в экран профиля.
                 // В ProfileScreen при нажатии кнопки "Выход" нужно вызвать этот лямбда-метод.
-                ProfileScreen(onLogout = onLogout)
+                ProfileScreen(
+                    onLogout = onLogout,
+                    onOpenDebts = { navController.navigate(Screen.Debts.route) }
+                )
             }
 
             composable(
@@ -172,6 +178,12 @@ fun MainNavigation(
                 DeadlinesScreen(
                     onBack = { navController.popBackStack() },
                     onOpenCourse = { courseId -> navController.navigate("course/$courseId") }
+                )
+            }
+
+            composable(Screen.Debts.route) {
+                DebtsScreen(
+                    onBack = { navController.popBackStack() }
                 )
             }
         }

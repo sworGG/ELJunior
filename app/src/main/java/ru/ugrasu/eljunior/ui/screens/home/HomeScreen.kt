@@ -62,19 +62,21 @@ import ru.ugrasu.eljunior.ui.theme.BackgroundGray
 import ru.ugrasu.eljunior.ui.theme.PrimaryRed
 import ru.ugrasu.eljunior.ui.theme.PrimaryRedDark
 import ru.ugrasu.eljunior.ui.theme.TextPrimary
+import ru.ugrasu.eljunior.ui.components.DebtsWidget
 import ru.ugrasu.eljunior.ui.theme.TextSecondary
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onShowAllDeadlines: () -> Unit,
+    onShowDebts: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
 
     PullToRefreshBox(
-        isRefreshing = uiState.isLoadingDeadlines,
+        isRefreshing = uiState.isLoadingDeadlines || uiState.isLoadingDebts,
         onRefresh = { viewModel.refresh() },
         modifier = Modifier
             .fillMaxSize()
@@ -129,6 +131,15 @@ fun HomeScreen(
                 DeadlinesSection(
                     deadlines = uiState.deadlines,
                     onShowAllClick = onShowAllDeadlines
+                )
+            }
+
+            // Debts widget
+            item {
+                DebtsWidget(
+                    activeCount = uiState.activeDebtsCount,
+                    isLoading = uiState.isLoadingDebts,
+                    onClick = onShowDebts
                 )
             }
 
