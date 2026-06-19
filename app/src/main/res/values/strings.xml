@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ELJunior</string>
+
+    <!-- Auth -->
+    <string name="login">Войти</string>
+    <string name="username">Логин</string>
+    <string name="password">Пароль</string>
+    <string name="login_title">Электронный университет</string>
+    <string name="login_subtitle">ЮГУ</string>
+    <string name="forgot_password">Забыли пароль?</string>
+    <string name="login_error">Неверный логин или пароль</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Главная</string>
+    <string name="nav_schedule">Расписание</string>
+    <string name="nav_courses">Курсы</string>
+    <string name="nav_profile">Профиль</string>
+
+    <!-- Home -->
+    <string name="dont_miss">Не пропустите</string>
+    <string name="starts_in">Начало через</string>
+    <string name="upcoming_deadlines">Ближайшие дедлайны</string>
+    <string name="show_all">Показать все</string>
+    <string name="today">Сегодня</string>
+    <string name="schedule">Расписание</string>
+    <string name="go_to_test">К тесту</string>
+    <string name="closing_access">Закрытие доступа:</string>
+
+    <!-- Schedule -->
+    <string name="even_week">Четная</string>
+    <string name="odd_week">Нечетная</string>
+
+    <!-- Profile -->
+    <string name="student">Студент</string>
+    <string name="logout">Выйти</string>
+    <string name="settings">Настройки</string>
+    <string name="notifications">Уведомления</string>
+    <string name="about">О приложении</string>
+
+    <!-- Common -->
+    <string name="loading">Загрузка...</string>
+    <string name="error">Ошибка</string>
+    <string name="retry">Повторить</string>
+    <string name="no_data">Нет данных</string>
+</resources>
