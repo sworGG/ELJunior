@@ -60,7 +60,19 @@ class ItportRepository @Inject constructor(
                 }
 
                 val type = object : TypeToken<List<ItportAcademicRecordDto>>() {}.type
-                val items: List<ItportAcademicRecordDto> = gson.fromJson(body, type) ?: emptyList()
+                val items: List<ItportAcademicRecordDto> = try {
+                    gson.fromJson(body, type) ?: emptyList()
+                } catch (e: Exception) {
+                    // Иногда API возвращает один объект вместо массива
+                    try {
+                        val singleItem: ItportAcademicRecordDto? = gson.fromJson(body, ItportAcademicRecordDto::class.java)
+                        singleItem?.let { listOf(it) } ?: emptyList()
+                    } catch (inner: Exception) {
+                        return@withContext Result.failure(
+                            Exception("Неверный формат данных академической успеваемости: ${e.toUserMessage()}")
+                        )
+                    }
+                }
 
                 Result.success(items.toAcademicProgressData())
             } catch (e: Exception) {

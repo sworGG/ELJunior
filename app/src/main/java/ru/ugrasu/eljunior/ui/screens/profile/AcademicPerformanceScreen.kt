@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -114,88 +115,89 @@ fun AcademicPerformanceScreen(
                 }
 
                 uiState.data != null -> {
-                    val data = uiState.data!!
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        data.averageGrade?.let { avg ->
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color.White)
-                            ) {
-                                Row(
+                    uiState.data?.let { data ->
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            data.averageGrade?.let { avg ->
+                                Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(16.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color.White)
                                 ) {
-                                    Text(
-                                        text = "Средний балл",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = TextSecondary
-                                    )
-                                    Text(
-                                        text = String.format("%.2f", avg),
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        fontWeight = FontWeight.Bold,
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Средний балл",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = TextSecondary
+                                        )
+                                        Text(
+                                            text = String.format("%.2f", avg),
+                                            style = MaterialTheme.typography.headlineSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = PrimaryRed
+                                        )
+                                    }
+                                }
+                            }
+
+                            TabRow(
+                                selectedTabIndex = selectedTab,
+                                containerColor = Color.White,
+                                indicator = { tabPositions ->
+                                    TabRowDefaults.SecondaryIndicator(
+                                        modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
                                         color = PrimaryRed
                                     )
                                 }
-                            }
-                        }
-
-                        TabRow(
-                            selectedTabIndex = selectedTab,
-                            containerColor = Color.White,
-                            indicator = { tabPositions ->
-                                TabRowDefaults.SecondaryIndicator(
-                                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                                    color = PrimaryRed
+                            ) {
+                                Tab(
+                                    selected = selectedTab == 0,
+                                    onClick = { selectedTab = 0 },
+                                    text = {
+                                        Text("Успешно сданные (${data.passed.size})")
+                                    }
+                                )
+                                Tab(
+                                    selected = selectedTab == 1,
+                                    onClick = { selectedTab = 1 },
+                                    text = {
+                                        Text("Академ. задолж. (${data.debts.size})")
+                                    }
                                 )
                             }
-                        ) {
-                            Tab(
-                                selected = selectedTab == 0,
-                                onClick = { selectedTab = 0 },
-                                text = {
-                                    Text("Успешно сданные (${data.passed.size})")
-                                }
-                            )
-                            Tab(
-                                selected = selectedTab == 1,
-                                onClick = { selectedTab = 1 },
-                                text = {
-                                    Text("Академ. задолж. (${data.debts.size})")
-                                }
-                            )
-                        }
 
-                        val records = if (selectedTab == 0) data.passed else data.debts
-                        if (records.isEmpty()) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = if (selectedTab == 0) {
-                                        "Нет успешно сданных предметов"
-                                    } else {
-                                        "Академических задолженностей нет"
-                                    },
-                                    color = TextSecondary
-                                )
-                            }
-                        } else {
-                            LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                items(records, key = { "${it.discipline}-${it.finishedAt}-${it.grade}" }) { record ->
-                                    AcademicRecordCard(record = record, isDebt = selectedTab == 1)
+                            val records = if (selectedTab == 0) data.passed else data.debts
+                            if (records.isEmpty()) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (selectedTab == 0) {
+                                            "Нет успешно сданных предметов"
+                                        } else {
+                                            "Академических задолженностей нет"
+                                        },
+                                        color = TextSecondary
+                                    )
+                                }
+                            } else {
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    itemsIndexed(records) { _, record ->
+                                        AcademicRecordCard(record = record, isDebt = selectedTab == 1)
+                                    }
                                 }
                             }
                         }
