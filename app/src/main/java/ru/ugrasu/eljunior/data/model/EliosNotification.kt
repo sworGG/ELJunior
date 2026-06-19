@@ -37,7 +37,6 @@ fun List<ItportNotificationDto>.toDomainNotifications(): List<EliosNotification>
         val typeId = dto.typeId ?: 0
         typeId !in EXCLUDED_TYPE_IDS
     }.map { it.toDomain() }
-        .sortedByDescending { it.sentAt }
 }
 
 private val EXCLUDED_TYPE_IDS = setOf(33, 34)

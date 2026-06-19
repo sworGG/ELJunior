@@ -134,12 +134,11 @@ fun HomeScreen(
                 )
             }
 
-            // Statistics Section
+            // Summary section
             item {
-                StatisticsSection(
-                    totalCourses = profileUiState.totalCourses,
-                    completedCourses = profileUiState.completedCourses,
-                    averageGrade = profileUiState.averageGrade
+                SummarySection(
+                    activeDebtsCount = homeUiState.activeDebtsCount,
+                    upcomingDeadlinesCount = homeUiState.deadlines.size
                 )
             }
 
@@ -239,14 +238,13 @@ fun EnhancedHomeHeader(
 }
 
 @Composable
-fun StatisticsSection(
-    totalCourses: Int,
-    completedCourses: Int,
-    averageGrade: Float
+fun SummarySection(
+    activeDebtsCount: Int,
+    upcomingDeadlinesCount: Int
 ) {
     Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
         Text(
-            text = "Ваша статистика",
+            text = "Краткий обзор",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = TextPrimary,
@@ -260,21 +258,15 @@ fun StatisticsSection(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             StatCard(
-                value = totalCourses.toString(),
-                label = "Курсов",
-                icon = Icons.Default.School,
+                value = activeDebtsCount.toString(),
+                label = "Активных долгов",
+                icon = Icons.Default.Notifications,
                 modifier = Modifier.weight(1f)
             )
             StatCard(
-                value = completedCourses.toString(),
-                label = "Завершено",
+                value = upcomingDeadlinesCount.toString(),
+                label = "Дедлайнов за 30 дней",
                 icon = Icons.Default.Schedule,
-                modifier = Modifier.weight(1f)
-            )
-            StatCard(
-                value = String.format("%.1f", averageGrade),
-                label = "Ср. балл",
-                icon = Icons.Default.Person,
                 modifier = Modifier.weight(1f)
             )
         }
